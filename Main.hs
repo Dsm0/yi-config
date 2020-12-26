@@ -9,9 +9,12 @@ import Lens.Micro.Platform
 import System.Directory (getCurrentDirectory)
 import System.Environment
 
+
+import Yi.Keymap.Vim.StateUtils (resetCountE)
 import Yi hiding (super)
 import Yi.Utils (io)
-import Yi.Modes (gnuMakeMode)
+import Yi.Modes (gnuMakeMode, jsonMode, cMode)
+
 import qualified Yi.Keymap.Vim as V
 import qualified Yi.Keymap.Vim.Common as V
 import qualified Yi.Keymap.Vim.Ex.Types as V
@@ -60,6 +63,17 @@ myKeymapSet = V.mkKeymapSet $ V.defVimConfig `override` \super this ->
                 V.vimExCommandParsers super
         }
 
+nextWin :: EditorM ()
+nextWin = do
+  nextWinE
+  resetCountE
+
+prevWin :: EditorM ()
+prevWin = do
+  prevWinE
+  resetCountE
+
+
 myBindings :: (V.EventString -> EditorM ()) -> [V.VimBinding]
 myBindings eval =
     let nmap x y = V.mkStringBindingE V.Normal V.Drop (x, y, id)
@@ -80,6 +94,8 @@ myBindings eval =
        , nmap "<M-h>" (withCurrentBuffer (transposeB unitWord Backward))
        , nmap "<C-@>" showErrorE
        , nmap "<M-d>" debug
+       , nmap "<C-w>j" nextWin
+       , nmap "<C-w>k" prevWin
        , nmapY "s" (jumpToNextErrorInCurrentBufferY Forward)
        , nmapY "S" (jumpToNextErrorY Forward)
        , nmap ",s" insertErrorMessageE
@@ -128,6 +144,8 @@ myModes cfg
     = AnyMode gnuMakeMode
     : AnyMode pyflakesMode
     : AnyMode rainbowParenMode
+    : AnyMode cMode
+    : AnyMode jsonMode
     : modeTable cfg
 
 exPwd :: V.EventString -> Maybe V.ExCommand
