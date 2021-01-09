@@ -14,6 +14,7 @@ import Yi.Keymap.Vim.StateUtils (resetCountE)
 import Yi hiding (super)
 import Yi.Utils (io)
 import Yi.Modes (gnuMakeMode, jsonMode, cMode)
+import Yi.Mode.Haskell (cleverMode, preciseMode, literateMode, fastMode)
 
 import qualified Yi.Keymap.Vim as V
 import qualified Yi.Keymap.Vim.Common as V
@@ -29,6 +30,9 @@ import MySnippets
 
 import RainbowMode
 import PyflakesMode
+
+type Bindings = ((V.EventString -> EditorM ()) -> [V.VimBinding])
+type Parsers = [V.EventString -> Maybe V.ExCommand]
 
 main :: IO ()
 main = do
@@ -53,15 +57,21 @@ myConfig actions = defaultConfig
         : actions
     }
 
-myKeymapSet :: KeymapSet
-myKeymapSet = V.mkKeymapSet $ V.defVimConfig `override` \super this ->
+
+makeKeymapSet  :: Bindings -> Parsers -> KeymapSet
+makeKeymapSet bindings parsers = V.mkKeymapSet $ V.defVimConfig `override` \super this ->
     let eval = V.pureEval this
     in super
-        { V.vimBindings = myBindings eval ++ V.vimBindings super
+        { V.vimBindings = bindings eval ++ V.vimBindings super
         , V.vimExCommandParsers =
-            exMake : exFlakes : exMakePrgOption : exPwd :
-                V.vimExCommandParsers super
+            parsers ++ 
+            V.vimExCommandParsers super
         }
+
+
+myKeymapSet :: KeymapSet
+myKeymapSet = makeKeymapSet myBindings myParsers
+
 
 nextWin :: EditorM ()
 nextWin = do
@@ -73,18 +83,33 @@ prevWin = do
   prevWinE
   resetCountE
 
+activeSnippets :: [Snippet.Snippet]
+activeSnippets = mySnippets
 
-myBindings :: (V.EventString -> EditorM ()) -> [V.VimBinding]
-myBindings eval =
-    let nmap x y = V.mkStringBindingE V.Normal V.Drop (x, y, id)
-        nmapY x y = V.mkStringBindingY V.Normal (x, y, id)
-        imapY x y = V.VimBindingY (\evs state -> case V.vsMode state of
+findSnippet :: [Snippet.Snippet] -> YiM ()
+findSnippet snippets =
+  (withEditor $ do
+      expanded <- Snippet.expandSnippetE (defEval "<Esc>") snippets
+      when (not expanded) (defEval "<Tab>"))
+
+myParsers :: Parsers
+myParsers = [exMake , exFlakes , exMakePrgOption , exPwd]
+
+-- useful for defining vim bindings
+defEval :: V.EventString -> EditorM ()
+defEval = V.pureEval (extractValue V.defVimConfig)
+
+nmap x y = V.mkStringBindingE V.Normal V.Drop (x, y, id)
+nmapY x y = V.mkStringBindingY V.Normal (x, y, id)
+imapY x y = V.VimBindingY (\evs state -> case V.vsMode state of
                                     V.Insert _ ->
                                         fmap (const (y >> return V.Drop))
                                              (evs `V.matchesString` x)
                                     _ -> V.NoMatch)
-        defEval = V.pureEval (extractValue V.defVimConfig)
-    in [ nmap "<BS>" previousTabE
+
+myBindings :: Bindings
+myBindings eval =
+       [ nmap "<BS>" previousTabE
        , nmap "<Tab>" nextTabE
        , nmap " " (eval ":nohlsearch<CR>")
        , nmap ";" (eval ":")
@@ -96,13 +121,11 @@ myBindings eval =
        , nmap "<M-d>" debug
        , nmap "<C-w>j" nextWin
        , nmap "<C-w>k" prevWin
+       , nmap "<C-w>b" splitE
        , nmapY "s" (jumpToNextErrorInCurrentBufferY Forward)
        , nmapY "S" (jumpToNextErrorY Forward)
        , nmap ",s" insertErrorMessageE
-       , imapY "<Tab>"
-           (withEditor $ do
-               expanded <- Snippet.expandSnippetE (defEval "<Esc>") mySnippets 
-               when (not expanded) (defEval "<Tab>"))
+       , imapY "<Tab>" (findSnippet mySnippets)
        , nmapY "<Esc>" (flakes >> withEditor (defEval "<Esc>"))
        ]
 
@@ -143,9 +166,13 @@ myModes :: Config -> [AnyMode]
 myModes cfg
     = AnyMode gnuMakeMode
     : AnyMode pyflakesMode
-    : AnyMode rainbowParenMode
     : AnyMode cMode
     : AnyMode jsonMode
+    : AnyMode cleverMode
+    : AnyMode preciseMode
+    : AnyMode literateMode
+    : AnyMode fastMode
+    : AnyMode rainbowParenMode
     : modeTable cfg
 
 exPwd :: V.EventString -> Maybe V.ExCommand

@@ -46,6 +46,7 @@ executable e
     , yi-frontend-vty
     , yi-keymap-vim
     , yi-language
+    , yi-mode-haskell
     , yi-misc-modes
     , yi-rope
     , yi-snippet

@@ -14,12 +14,19 @@ import Yi.Snippet
 
 mySnippets :: [Snippet]
 mySnippets =
-    [ Snippet "m" $ do
+    [
+    Snippet "m" $ do
         moduleName <- guessModuleName <$> refer filename
         line ("module " <> moduleName)
         lit "    (" >> finish >> nl
         lit "    ) where"
-    , Snippet "lp" $ do
+    ,
+    Snippet "d" $ do
+        lit "d1 $ \""
+        _ <- place "\""
+        lit ""
+    ,
+      Snippet "lp" $ do
         lit "{-# language "
         _ <- place "OverloadedStrings"
         lit " #-}"
@@ -69,6 +76,17 @@ mySnippets =
         nl
         line "@"
     ]
+
+
+-- haskellSnippets :: [Snippet]
+-- haskellSnippets =
+--     [ Snippet "m" $ do
+--         moduleName <- guessModuleName <$> refer filename
+--         line ("module " <> moduleName)
+--         lit "    (" >> finish >> nl
+--         lit "    ) where"
+--         line "@"
+--     ]
 
 guessModuleName :: R.YiString -> R.YiString
 guessModuleName =
